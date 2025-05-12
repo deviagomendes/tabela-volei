@@ -2,6 +2,12 @@ import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from "sonner";
 import { Toaster } from "sonner";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import { CalendarIcon, PrinterIcon } from "lucide-react";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 interface Set {
   pointsA: number;
@@ -14,6 +20,7 @@ interface Game {
   sets: Set[];
   needsThirdSet: boolean;
   winner?: string;
+  date: string;
 }
 
 interface TeamStats {
@@ -50,7 +57,8 @@ const IndaiaVolleyballSystem = () => {
       { pointsA: 0, pointsB: 0 },
       { pointsA: 0, pointsB: 0 }
     ],
-    needsThirdSet: false
+    needsThirdSet: false,
+    date: new Date().toISOString()
   });
 
   // Estado para controlar o modo de edição
@@ -334,7 +342,8 @@ const IndaiaVolleyballSystem = () => {
       teamA: gameToEdit.teamA,
       teamB: gameToEdit.teamB,
       sets,
-      needsThirdSet: gameToEdit.sets.length > 2
+      needsThirdSet: gameToEdit.sets.length > 2,
+      date: gameToEdit.date || new Date().toISOString()
     });
     setEditingIndex(index);
     toast.info("Modo de edição ativado. Faça as alterações necessárias.");
@@ -359,11 +368,23 @@ const IndaiaVolleyballSystem = () => {
         { pointsA: 0, pointsB: 0 },
         { pointsA: 0, pointsB: 0 }
       ],
-      needsThirdSet: false
+      needsThirdSet: false,
+      date: new Date().toISOString()
     });
     if (editingIndex !== null) {
       setEditingIndex(null);
       toast.info("Edição cancelada.");
+    }
+  };
+
+  // Função para formatar a data
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'N/A';
+      return format(date, "EEEE, dd/MM/yyyy", { locale: ptBR });
+    } catch (error) {
+      return 'N/A';
     }
   };
 
@@ -373,6 +394,93 @@ const IndaiaVolleyballSystem = () => {
     if (set.pointsA > set.pointsB) return 'A';
     if (set.pointsB > set.pointsA) return 'B';
     return '-';
+  };
+
+  // Função para imprimir uma seção específica
+  const handlePrint = (section: 'ranking' | 'games') => {
+    const printContent = document.getElementById(section);
+    if (!printContent) return;
+
+    const originalDisplay = document.body.style.display;
+    const originalOverflow = document.body.style.overflow;
+    const originalBackground = document.body.style.backgroundColor;
+
+    // Criar um iframe para impressão
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+
+    const iframeDoc = iframe.contentWindow?.document;
+    if (!iframeDoc) return;
+
+    // Adicionar estilos e conteúdo ao iframe
+    iframeDoc.write(`
+      <html>
+        <head>
+          <title>Impressão - ${section === 'ranking' ? 'Classificação' : 'Jogos'}</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              margin: 20px;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-bottom: 20px;
+            }
+            th, td {
+              border: 1px solid #ddd;
+              padding: 8px;
+              text-align: left;
+            }
+            th {
+              background-color: ${colors.primary};
+              color: white;
+            }
+            tr:nth-child(even) {
+              background-color: #f9f9f9;
+            }
+            .header {
+              text-align: center;
+              margin-bottom: 20px;
+            }
+            .header h1 {
+              color: ${colors.primary};
+              margin-bottom: 10px;
+            }
+            .header p {
+              color: #666;
+            }
+            @media print {
+              body {
+                margin: 0;
+                padding: 20px;
+              }
+              .no-print {
+                display: none;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Sistema de Controle de Jogos - Clube Indaiá Dourados/MS</h1>
+            <p>${section === 'ranking' ? 'Tabela de Classificação' : 'Tabela de Jogos'}</p>
+            <p>Data de impressão: ${format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</p>
+          </div>
+          ${printContent.innerHTML}
+        </body>
+      </html>
+    `);
+
+    // Imprimir
+    iframe.contentWindow?.print();
+
+    // Limpar
+    document.body.removeChild(iframe);
+    document.body.style.display = originalDisplay;
+    document.body.style.overflow = originalOverflow;
+    document.body.style.backgroundColor = originalBackground;
   };
 
   // Renderizar a interface do usuário
@@ -429,6 +537,31 @@ const IndaiaVolleyballSystem = () => {
                   ))}
                 </select>
               </div>
+
+              {/* Data do Jogo */}
+              <div>
+                <label className="block text-sm font-medium mb-1">Data do Jogo</label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start text-left font-normal"
+                      style={{ borderColor: colors.primary }}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {formatDate(currentGame.date)}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={new Date(currentGame.date)}
+                      onSelect={(date) => date && setCurrentGame(prev => ({ ...prev, date: date.toISOString() }))}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
 
             {/* Seção de Sets */}
@@ -456,7 +589,7 @@ const IndaiaVolleyballSystem = () => {
                       <label className="block text-sm mb-1">{currentGame.teamA || 'Equipe A'}</label>
                       <input
                         type="number"
-                        value={currentGame.sets[0].pointsA}
+                        value={currentGame.sets[0].pointsA || ''}
                         onChange={(e) => handleSetPointsChange(0, 'A', e.target.value)}
                         className="w-full p-2 border rounded-md"
                         min="0"
@@ -466,7 +599,7 @@ const IndaiaVolleyballSystem = () => {
                       <label className="block text-sm mb-1">{currentGame.teamB || 'Equipe B'}</label>
                       <input
                         type="number"
-                        value={currentGame.sets[0].pointsB}
+                        value={currentGame.sets[0].pointsB || ''}
                         onChange={(e) => handleSetPointsChange(0, 'B', e.target.value)}
                         className="w-full p-2 border rounded-md"
                         min="0"
@@ -495,7 +628,7 @@ const IndaiaVolleyballSystem = () => {
                       <label className="block text-sm mb-1">{currentGame.teamA || 'Equipe A'}</label>
                       <input
                         type="number"
-                        value={currentGame.sets[1].pointsA}
+                        value={currentGame.sets[1].pointsA || ''}
                         onChange={(e) => handleSetPointsChange(1, 'A', e.target.value)}
                         className="w-full p-2 border rounded-md"
                         min="0"
@@ -505,7 +638,7 @@ const IndaiaVolleyballSystem = () => {
                       <label className="block text-sm mb-1">{currentGame.teamB || 'Equipe B'}</label>
                       <input
                         type="number"
-                        value={currentGame.sets[1].pointsB}
+                        value={currentGame.sets[1].pointsB || ''}
                         onChange={(e) => handleSetPointsChange(1, 'B', e.target.value)}
                         className="w-full p-2 border rounded-md"
                         min="0"
@@ -534,7 +667,7 @@ const IndaiaVolleyballSystem = () => {
                       <label className="block text-sm mb-1">{currentGame.teamA || 'Equipe A'}</label>
                       <input
                         type="number"
-                        value={currentGame.sets[2].pointsA}
+                        value={currentGame.sets[2].pointsA || ''}
                         onChange={(e) => handleSetPointsChange(2, 'A', e.target.value)}
                         className="w-full p-2 border rounded-md"
                         min="0"
@@ -544,7 +677,7 @@ const IndaiaVolleyballSystem = () => {
                       <label className="block text-sm mb-1">{currentGame.teamB || 'Equipe B'}</label>
                       <input
                         type="number"
-                        value={currentGame.sets[2].pointsB}
+                        value={currentGame.sets[2].pointsB || ''}
                         onChange={(e) => handleSetPointsChange(2, 'B', e.target.value)}
                         className="w-full p-2 border rounded-md"
                         min="0"
@@ -581,13 +714,24 @@ const IndaiaVolleyballSystem = () => {
 
           {/* Tabela de Jogos */}
           <div className="mb-8 p-6 rounded-lg shadow-md" style={{ backgroundColor: 'white' }}>
-            <h2 className="text-xl font-semibold mb-4" style={{ color: colors.primary }}>Tabela de Jogos</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold" style={{ color: colors.primary }}>Tabela de Jogos</h2>
+              <Button
+                onClick={() => handlePrint('games')}
+                className="flex items-center gap-2"
+                style={{ backgroundColor: colors.primary }}
+              >
+                <PrinterIcon className="h-4 w-4" />
+                Imprimir Jogos
+              </Button>
+            </div>
 
-            <div className="overflow-x-auto">
+            <div id="games" className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead style={{ backgroundColor: colors.primary }}>
                   <tr>
                     <th className="px-4 py-2 text-left text-white">#</th>
+                    <th className="px-4 py-2 text-left text-white">Data</th>
                     <th className="px-4 py-2 text-left text-white">Equipe A</th>
                     <th className="px-4 py-2 text-left text-white">Equipe B</th>
                     <th className="px-4 py-2 text-left text-white">Set 1</th>
@@ -600,7 +744,7 @@ const IndaiaVolleyballSystem = () => {
                 <tbody className="divide-y divide-gray-200">
                   {games.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-4 py-4 text-center text-gray-500">
+                      <td colSpan={9} className="px-4 py-4 text-center text-gray-500">
                         Nenhum jogo registrado ainda
                       </td>
                     </tr>
@@ -608,6 +752,7 @@ const IndaiaVolleyballSystem = () => {
                     games.map((game, index) => (
                       <tr key={index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                         <td className="px-4 py-3">{index + 1}</td>
+                        <td className="px-4 py-3">{formatDate(game.date)}</td>
                         <td className="px-4 py-3">{game.teamA}</td>
                         <td className="px-4 py-3">{game.teamB}</td>
                         <td className="px-4 py-3">
@@ -655,9 +800,30 @@ const IndaiaVolleyballSystem = () => {
 
           {/* Tabela de Classificação */}
           <div className="p-6 rounded-lg shadow-md" style={{ backgroundColor: 'white' }}>
-            <h2 className="text-xl font-semibold mb-4" style={{ color: colors.primary }}>Classificação</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold" style={{ color: colors.primary }}>Classificação</h2>
+              <Button
+                onClick={() => handlePrint('ranking')}
+                className="flex items-center gap-2"
+                style={{ backgroundColor: colors.primary }}
+              >
+                <PrinterIcon className="h-4 w-4" />
+                Imprimir Classificação
+              </Button>
+            </div>
 
-            <div className="overflow-x-auto">
+            <div className="mb-4 text-sm text-gray-600">
+              <p><strong>Pos.</strong> - Posição na classificação</p>
+              <p><strong>Equipe</strong> - Nome da equipe</p>
+              <p><strong>J</strong> - Total de jogos disputados</p>
+              <p><strong>V</strong> - Vitórias</p>
+              <p><strong>D</strong> - Derrotas</p>
+              <p><strong>Sets (G-P)</strong> - Sets ganhos e perdidos</p>
+              <p><strong>Pontos (M-S)</strong> - Pontos marcados e sofridos</p>
+              <p><strong>Saldo</strong> - Diferença entre pontos marcados e sofridos</p>
+            </div>
+
+            <div id="ranking" className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead style={{ backgroundColor: colors.primary }}>
                   <tr>
