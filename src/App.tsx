@@ -1,19 +1,52 @@
 import { useState, useEffect } from 'react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { toast } from "sonner";
+import { Toaster } from "sonner";
+
+interface Set {
+  pointsA: number;
+  pointsB: number;
+}
+
+interface Game {
+  teamA: string;
+  teamB: string;
+  sets: Set[];
+  needsThirdSet: boolean;
+  winner?: string;
+}
+
+interface TeamStats {
+  name: string;
+  gamesPlayed: number;
+  setsWon: number;
+  setsLost: number;
+  pointsWon: number;
+  pointsLost: number;
+  gamesWon: number;
+  gamesLost: number;
+}
 
 const IndaiaVolleyballSystem = () => {
   // Estados para armazenar os jogos e ranking
-  const [games, setGames] = useState([]);
-  const [ranking, setRanking] = useState([]);
-  const [teams, setTeams] = useState([]);
+  const [games, setGames] = useState<Game[]>(() => {
+    const savedGames = localStorage.getItem('volleyball-games');
+    return savedGames ? JSON.parse(savedGames) : [];
+  });
+  
+  const [ranking, setRanking] = useState<TeamStats[]>([]);
+  const [teams, setTeams] = useState<string[]>(() => {
+    const savedTeams = localStorage.getItem('volleyball-teams');
+    return savedTeams ? JSON.parse(savedTeams) : [];
+  });
   const [newTeam, setNewTeam] = useState('');
 
   // Estado para o jogo atual sendo adicionado/editado
-  const [currentGame, setCurrentGame] = useState({
+  const [currentGame, setCurrentGame] = useState<Game>({
     teamA: '',
     teamB: '',
     sets: [
+      { pointsA: 0, pointsB: 0 },
       { pointsA: 0, pointsB: 0 },
       { pointsA: 0, pointsB: 0 }
     ],
@@ -21,7 +54,7 @@ const IndaiaVolleyballSystem = () => {
   });
 
   // Estado para controlar o modo de edição
-  const [editingIndex, setEditingIndex] = useState(null);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
 
   // Cores do Clube Indaiá Dourados/MS
   const colors = {
@@ -30,10 +63,22 @@ const IndaiaVolleyballSystem = () => {
     accent: '#FFFF00', // Amarelo
     background: '#F0F8FF', // Azul claro
     text: '#004225' // Verde escuro para texto
-  };
+  } as const;
 
   // Efeito para verificar se precisa de um terceiro set (quando cada time ganhou 1 set)
   useEffect(() => {
+    // Garantir que sempre temos 3 sets
+    if (currentGame.sets.length < 3) {
+      setCurrentGame(prev => ({
+        ...prev,
+        sets: [
+          ...prev.sets,
+          ...Array(3 - prev.sets.length).fill({ pointsA: 0, pointsB: 0 })
+        ]
+      }));
+      return;
+    }
+
     const set1Winner = currentGame.sets[0].pointsA > currentGame.sets[0].pointsB ? 'A' : 'B';
     const set2Winner = currentGame.sets[1].pointsA > currentGame.sets[1].pointsB ? 'A' : 'B';
 
@@ -41,35 +86,36 @@ const IndaiaVolleyballSystem = () => {
     if (currentGame.sets[0].pointsA > 0 && currentGame.sets[0].pointsB > 0 &&
       currentGame.sets[1].pointsA > 0 && currentGame.sets[1].pointsB > 0 &&
       set1Winner !== set2Winner) {
-
-      // Adiciona o terceiro set se ainda não existir
-      if (currentGame.sets.length < 3) {
-        setCurrentGame(prev => ({
-          ...prev,
-          sets: [...prev.sets, { pointsA: 0, pointsB: 0 }],
-          needsThirdSet: true
-        }));
-      }
+      setCurrentGame(prev => ({
+        ...prev,
+        needsThirdSet: true
+      }));
     } else {
-      // Remove o terceiro set se existir e não for mais necessário
-      if (currentGame.sets.length > 2) {
-        setCurrentGame(prev => ({
-          ...prev,
-          sets: prev.sets.slice(0, 2),
-          needsThirdSet: false
-        }));
-      }
+      setCurrentGame(prev => ({
+        ...prev,
+        needsThirdSet: false
+      }));
     }
-  }, [currentGame.sets[0], currentGame.sets[1]]);
+  }, [currentGame.sets]);
 
   // Efeito para calcular o ranking sempre que os jogos são atualizados
   useEffect(() => {
     calculateRanking();
   }, [games]);
 
+  // Efeito para salvar jogos no localStorage
+  useEffect(() => {
+    localStorage.setItem('volleyball-games', JSON.stringify(games));
+  }, [games]);
+
+  // Efeito para salvar times no localStorage
+  useEffect(() => {
+    localStorage.setItem('volleyball-teams', JSON.stringify(teams));
+  }, [teams]);
+
   // Função para calcular o ranking das equipes
   const calculateRanking = () => {
-    const teamsMap = new Map();
+    const teamsMap = new Map<string, TeamStats>();
 
     // Processar todos os jogos para criar estatísticas de cada time
     games.forEach(game => {
@@ -82,8 +128,8 @@ const IndaiaVolleyballSystem = () => {
         teamsMap.set(game.teamB, initTeamStats(game.teamB));
       }
 
-      const teamAStats = teamsMap.get(game.teamA);
-      const teamBStats = teamsMap.get(game.teamB);
+      const teamAStats = teamsMap.get(game.teamA)!;
+      const teamBStats = teamsMap.get(game.teamB)!;
 
       // Contar jogos disputados
       teamAStats.gamesPlayed += 1;
@@ -98,13 +144,13 @@ const IndaiaVolleyballSystem = () => {
       // Percorrer todos os sets do jogo
       game.sets.forEach(set => {
         // Adicionar pontos de cada set
-        totalPointsA += parseInt(set.pointsA);
-        totalPointsB += parseInt(set.pointsB);
+        totalPointsA += set.pointsA;
+        totalPointsB += set.pointsB;
 
         // Contar quem ganhou cada set
-        if (parseInt(set.pointsA) > parseInt(set.pointsB)) {
+        if (set.pointsA > set.pointsB) {
           setsWonByA++;
-        } else if (parseInt(set.pointsB) > parseInt(set.pointsA)) {
+        } else if (set.pointsB > set.pointsA) {
           setsWonByB++;
         }
       });
@@ -116,22 +162,22 @@ const IndaiaVolleyballSystem = () => {
       teamBStats.setsLost += setsWonByA;
 
       // Atualizar pontos marcados/concedidos
-      teamAStats.pointsScored += totalPointsA;
-      teamAStats.pointsConceded += totalPointsB;
-      teamBStats.pointsScored += totalPointsB;
-      teamBStats.pointsConceded += totalPointsA;
+      teamAStats.pointsWon += totalPointsA;
+      teamAStats.pointsLost += totalPointsB;
+      teamBStats.pointsWon += totalPointsB;
+      teamBStats.pointsLost += totalPointsA;
 
       // Determinar o vencedor do jogo (quem ganhou mais sets)
       if (setsWonByA > setsWonByB) {
         // Time A venceu: 3 pontos para A, 0 para B
-        teamAStats.wins += 1;
-        teamAStats.points += 3;
-        teamBStats.losses += 1;
+        teamAStats.gamesWon += 1;
+        teamAStats.pointsWon += 3;
+        teamBStats.gamesLost += 1;
       } else {
         // Time B venceu: 3 pontos para B, 0 para A
-        teamBStats.wins += 1;
-        teamBStats.points += 3;
-        teamAStats.losses += 1;
+        teamBStats.gamesWon += 1;
+        teamBStats.pointsWon += 3;
+        teamAStats.gamesLost += 1;
       }
     });
 
@@ -139,14 +185,14 @@ const IndaiaVolleyballSystem = () => {
     const rankingArray = Array.from(teamsMap.values());
     rankingArray.sort((a, b) => {
       // Ordenar primeiro por pontos
-      if (b.points !== a.points) return b.points - a.points;
+      if (b.pointsWon !== a.pointsWon) return b.pointsWon - a.pointsWon;
       // Depois por diferença de sets
       const aSetsBalance = a.setsWon - a.setsLost;
       const bSetsBalance = b.setsWon - b.setsLost;
       if (bSetsBalance !== aSetsBalance) return bSetsBalance - aSetsBalance;
       // Depois por diferença de pontos
-      const aPointsBalance = a.pointsScored - a.pointsConceded;
-      const bPointsBalance = b.pointsScored - b.pointsConceded;
+      const aPointsBalance = a.pointsWon - a.pointsLost;
+      const bPointsBalance = b.pointsWon - b.pointsLost;
       return bPointsBalance - aPointsBalance;
     });
 
@@ -155,40 +201,52 @@ const IndaiaVolleyballSystem = () => {
   };
 
   // Função auxiliar para inicializar estatísticas de um time
-  const initTeamStats = (teamName) => {
+  const initTeamStats = (teamName: string): TeamStats => {
     return {
       name: teamName,
-      points: 0,         // Pontos na classificação
-      gamesPlayed: 0,    // Jogos disputados
-      wins: 0,           // Vitórias
-      losses: 0,         // Derrotas
-      setsWon: 0,        // Sets ganhos
-      setsLost: 0,       // Sets perdidos
-      pointsScored: 0,   // Pontos marcados
-      pointsConceded: 0  // Pontos concedidos
+      gamesPlayed: 0,
+      setsWon: 0,
+      setsLost: 0,
+      pointsWon: 0,
+      pointsLost: 0,
+      gamesWon: 0,
+      gamesLost: 0
     };
   };
 
   // Função para adicionar um novo time
   const handleAddTeam = () => {
     if (!newTeam.trim()) {
+      toast.error("O nome do time não pode estar vazio.");
       return;
     }
     if (teams.includes(newTeam.trim())) {
-      alert('Este time já está cadastrado!');
+      toast.error("Este time já está cadastrado!");
       return;
     }
     setTeams([...teams, newTeam.trim()]);
     setNewTeam('');
+    toast.success("Time adicionado com sucesso!");
   };
 
   // Função para remover um time
-  const handleRemoveTeam = (teamToRemove) => {
+  const handleRemoveTeam = (teamToRemove: string) => {
+    // Verificar se o time está em algum jogo
+    const isTeamInGames = games.some(game => 
+      game.teamA === teamToRemove || game.teamB === teamToRemove
+    );
+
+    if (isTeamInGames) {
+      toast.error("Não é possível remover um time que já participou de jogos.");
+      return;
+    }
+
     setTeams(teams.filter(team => team !== teamToRemove));
+    toast.success("Time removido com sucesso!");
   };
 
   // Função para lidar com alterações nos inputs do formulário
-  const handleInputChange = (e) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const { name, value } = e.target;
     setCurrentGame(prev => ({
       ...prev,
@@ -197,9 +255,10 @@ const IndaiaVolleyballSystem = () => {
   };
 
   // Função para lidar com alterações nos pontos dos sets
-  const handleSetPointsChange = (setIndex, team, value) => {
+  const handleSetPointsChange = (setIndex: number, team: 'A' | 'B', value: string) => {
+    const newValue = parseInt(value) || 0;
     const newSets = [...currentGame.sets];
-    newSets[setIndex][`points${team}`] = value;
+    newSets[setIndex][`points${team}`] = newValue;
 
     setCurrentGame(prev => ({
       ...prev,
@@ -207,99 +266,86 @@ const IndaiaVolleyballSystem = () => {
     }));
   };
 
-  // Função para adicionar ou atualizar um jogo
-  const handleSubmitGame = () => {
-    // Validações básicas
+  // Função para validar e adicionar um jogo
+  const handleAddGame = () => {
+    // Verificar se os times foram selecionados
     if (!currentGame.teamA || !currentGame.teamB) {
-      <Alert>
-        <AlertDescription>
-          Por favor, preencha os nomes das duas equipes.
-        </AlertDescription>
-      </Alert>
+      toast.error("Por favor, selecione os dois times.");
       return;
     }
 
-    if (currentGame.teamA === currentGame.teamB) {
-      <Alert>
-        <AlertDescription>
-          As equipes não podem ser iguais.
-        </AlertDescription>
-      </Alert>
+    // Verificar se pelo menos dois sets têm pontuação
+    const setsWithPoints = currentGame.sets.filter(set => set.pointsA > 0 || set.pointsB > 0).length;
+    if (setsWithPoints < 2) {
+      toast.error("É necessário preencher pelo menos dois sets.");
       return;
     }
 
-    // Verificar se todos os sets têm pontuação
-    for (let i = 0; i < currentGame.sets.length; i++) {
-      const set = currentGame.sets[i];
-      if (set.pointsA <= 0 || set.pointsB <= 0) {
-        Alert(<p>Por favor, preencha a pontuação do Set ${i + 1} para ambas as equipes.</p>);
-        return;
-      }
-    }
-
-    // Calcular sets ganhos por cada time
-    let setsWonByA = 0;
-    let setsWonByB = 0;
+    // Verificar se há um vencedor claro
+    let setsWonA = 0;
+    let setsWonB = 0;
 
     currentGame.sets.forEach(set => {
-      if (parseInt(set.pointsA) > parseInt(set.pointsB)) {
-        setsWonByA++;
-      } else if (parseInt(set.pointsB) > parseInt(set.pointsA)) {
-        setsWonByB++;
-      }
+      if (set.pointsA > set.pointsB) setsWonA++;
+      else if (set.pointsB > set.pointsA) setsWonB++;
     });
 
-    // Verificar se tem um vencedor claro
-    if (setsWonByA === setsWonByB) {
-      <Alert>
-        <AlertDescription>
-          O jogo deve ter um vencedor. Verifique as pontuações dos sets.
-        </AlertDescription>
-      </Alert>
+    if (setsWonA === setsWonB) {
+      toast.error("Não pode haver empate. Um time deve vencer mais sets que o outro.");
       return;
     }
 
-    // Preparar dados do jogo com informações de sets e vencedor
-    const gameData = {
+    // Criar uma cópia do jogo atual
+    const newGame = {
       ...currentGame,
-      setsWonByA,
-      setsWonByB,
-      winner: setsWonByA > setsWonByB ? currentGame.teamA : currentGame.teamB
+      sets: currentGame.sets.map(set => ({
+        pointsA: set.pointsA || 0,
+        pointsB: set.pointsB || 0
+      })),
+      winner: setsWonA > setsWonB ? currentGame.teamA : currentGame.teamB
     };
 
-    // Atualizar o estado dos jogos
     if (editingIndex !== null) {
-      // Atualizar um jogo existente
+      // Atualizar jogo existente
       const updatedGames = [...games];
-      updatedGames[editingIndex] = gameData;
+      updatedGames[editingIndex] = newGame;
       setGames(updatedGames);
-      setEditingIndex(null);
+      toast.success("Jogo atualizado com sucesso!");
     } else {
-      // Adicionar um novo jogo
-      setGames([...games, gameData]);
+      // Adicionar novo jogo
+      setGames([...games, newGame]);
+      toast.success("Jogo registrado com sucesso!");
     }
 
-    // Limpar o formulário
+    // Resetar o formulário
     resetGameForm();
   };
 
   // Função para editar um jogo existente
-  const handleEditGame = (index) => {
+  const handleEditGame = (index: number) => {
     const gameToEdit = games[index];
+    const sets = [
+      gameToEdit.sets[0] || { pointsA: 0, pointsB: 0 },
+      gameToEdit.sets[1] || { pointsA: 0, pointsB: 0 },
+      gameToEdit.sets[2] || { pointsA: 0, pointsB: 0 }
+    ];
+
     setCurrentGame({
       teamA: gameToEdit.teamA,
       teamB: gameToEdit.teamB,
-      sets: [...gameToEdit.sets],
+      sets,
       needsThirdSet: gameToEdit.sets.length > 2
     });
     setEditingIndex(index);
+    toast.info("Modo de edição ativado. Faça as alterações necessárias.");
   };
 
   // Função para excluir um jogo
-  const handleDeleteGame = (index) => {
+  const handleDeleteGame = (index: number) => {
     if (confirm('Tem certeza que deseja excluir este jogo?')) {
       const updatedGames = games.filter((_, i) => i !== index);
       setGames(updatedGames);
+      toast.success("Jogo excluído com sucesso!");
     }
   };
 
@@ -310,16 +356,22 @@ const IndaiaVolleyballSystem = () => {
       teamB: '',
       sets: [
         { pointsA: 0, pointsB: 0 },
+        { pointsA: 0, pointsB: 0 },
         { pointsA: 0, pointsB: 0 }
       ],
       needsThirdSet: false
     });
+    if (editingIndex !== null) {
+      setEditingIndex(null);
+      toast.info("Edição cancelada.");
+    }
   };
 
   // Determinar o vencedor de um set
-  const getSetWinner = (set) => {
-    if (parseInt(set.pointsA) > parseInt(set.pointsB)) return 'A';
-    if (parseInt(set.pointsB) > parseInt(set.pointsA)) return 'B';
+  const getSetWinner = (set: Set | undefined): 'A' | 'B' | '-' => {
+    if (!set) return '-';
+    if (set.pointsA > set.pointsB) return 'A';
+    if (set.pointsB > set.pointsA) return 'B';
     return '-';
   };
 
@@ -352,7 +404,7 @@ const IndaiaVolleyballSystem = () => {
                   value={currentGame.teamA}
                   onChange={handleInputChange}
                   className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-opacity-50"
-                  style={{ borderColor: colors.primary, focusRing: colors.secondary }}
+                  style={{ borderColor: colors.primary }}
                 >
                   <option value="">Selecione uma equipe</option>
                   {teams.map((team, index) => (
@@ -369,7 +421,7 @@ const IndaiaVolleyballSystem = () => {
                   value={currentGame.teamB}
                   onChange={handleInputChange}
                   className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-opacity-50"
-                  style={{ borderColor: colors.primary, focusRing: colors.secondary }}
+                  style={{ borderColor: colors.primary }}
                 >
                   <option value="">Selecione uma equipe</option>
                   {teams.map((team, index) => (
@@ -462,52 +514,44 @@ const IndaiaVolleyballSystem = () => {
                   </div>
                 </div>
 
-                {/* Set 3 (condicional) */}
-                {currentGame.needsThirdSet && currentGame.sets.length > 2 && (
-                  <div className="p-4 rounded-md" style={{ backgroundColor: '#f0f9ff', borderLeft: `4px solid ${colors.accent}` }}>
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-medium" style={{ color: colors.text }}>Set 3 (Desempate)</h4>
-                      <div className="text-sm px-2 py-1 rounded"
-                        style={{
-                          backgroundColor: getSetWinner(currentGame.sets[2]) === 'A' ? colors.primary :
-                            getSetWinner(currentGame.sets[2]) === 'B' ? colors.secondary : 'transparent',
-                          color: getSetWinner(currentGame.sets[2]) === '-' ? colors.text : 'white',
-                          visibility: (currentGame.sets[2].pointsA > 0 || currentGame.sets[2].pointsB > 0) ? 'visible' : 'hidden'
-                        }}>
-                        Vencedor: {getSetWinner(currentGame.sets[2]) === 'A' ? currentGame.teamA :
-                          getSetWinner(currentGame.sets[2]) === 'B' ? currentGame.teamB : '-'}
-                      </div>
+                {/* Set 3 */}
+                <div className="p-4 rounded-md" style={{ backgroundColor: '#f0f9ff' }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-medium" style={{ color: colors.text }}>Set 3</h4>
+                    <div className="text-sm px-2 py-1 rounded"
+                      style={{
+                        backgroundColor: getSetWinner(currentGame.sets[2]) === 'A' ? colors.primary :
+                          getSetWinner(currentGame.sets[2]) === 'B' ? colors.secondary : 'transparent',
+                        color: getSetWinner(currentGame.sets[2]) === '-' ? colors.text : 'white',
+                        visibility: (currentGame.sets[2].pointsA > 0 || currentGame.sets[2].pointsB > 0) ? 'visible' : 'hidden'
+                      }}>
+                      Vencedor: {getSetWinner(currentGame.sets[2]) === 'A' ? currentGame.teamA :
+                        getSetWinner(currentGame.sets[2]) === 'B' ? currentGame.teamB : '-'}
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm mb-1">{currentGame.teamA || 'Equipe A'}</label>
-                        <input
-                          type="number"
-                          value={currentGame.sets[2].pointsA}
-                          onChange={(e) => handleSetPointsChange(2, 'A', e.target.value)}
-                          className="w-full p-2 border rounded-md"
-                          min="0"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm mb-1">{currentGame.teamB || 'Equipe B'}</label>
-                        <input
-                          type="number"
-                          value={currentGame.sets[2].pointsB}
-                          onChange={(e) => handleSetPointsChange(2, 'B', e.target.value)}
-                          className="w-full p-2 border rounded-md"
-                          min="0"
-                        />
-                      </div>
-                    </div>
-
-                    <Alert className="mt-2" variant="info" style={{ backgroundColor: '#FFF9C4', borderColor: colors.accent }}>
-                      <AlertDescription>
-                        Este set de desempate foi adicionado automaticamente porque cada equipe venceu um set.
-                      </AlertDescription>
-                    </Alert>
                   </div>
-                )}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm mb-1">{currentGame.teamA || 'Equipe A'}</label>
+                      <input
+                        type="number"
+                        value={currentGame.sets[2].pointsA}
+                        onChange={(e) => handleSetPointsChange(2, 'A', e.target.value)}
+                        className="w-full p-2 border rounded-md"
+                        min="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm mb-1">{currentGame.teamB || 'Equipe B'}</label>
+                      <input
+                        type="number"
+                        value={currentGame.sets[2].pointsB}
+                        onChange={(e) => handleSetPointsChange(2, 'B', e.target.value)}
+                        className="w-full p-2 border rounded-md"
+                        min="0"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -526,7 +570,7 @@ const IndaiaVolleyballSystem = () => {
                 </button>
               )}
               <button
-                onClick={handleSubmitGame}
+                onClick={handleAddGame}
                 className="px-4 py-2 rounded-md text-white"
                 style={{ backgroundColor: colors.primary }}
               >
@@ -556,7 +600,7 @@ const IndaiaVolleyballSystem = () => {
                 <tbody className="divide-y divide-gray-200">
                   {games.length === 0 ? (
                     <tr>
-                      <td colSpan="8" className="px-4 py-4 text-center text-gray-500">
+                      <td colSpan={8} className="px-4 py-4 text-center text-gray-500">
                         Nenhum jogo registrado ainda
                       </td>
                     </tr>
@@ -567,13 +611,19 @@ const IndaiaVolleyballSystem = () => {
                         <td className="px-4 py-3">{game.teamA}</td>
                         <td className="px-4 py-3">{game.teamB}</td>
                         <td className="px-4 py-3">
-                          {game.sets[0].pointsA} x {game.sets[0].pointsB}
+                          {game.sets[0] && (game.sets[0].pointsA > 0 || game.sets[0].pointsB > 0)
+                            ? `${game.sets[0].pointsA} x ${game.sets[0].pointsB}`
+                            : 'N/A'}
                         </td>
                         <td className="px-4 py-3">
-                          {game.sets[1].pointsA} x {game.sets[1].pointsB}
+                          {game.sets[1] && (game.sets[1].pointsA > 0 || game.sets[1].pointsB > 0)
+                            ? `${game.sets[1].pointsA} x ${game.sets[1].pointsB}`
+                            : 'N/A'}
                         </td>
                         <td className="px-4 py-3">
-                          {game.sets.length > 2 ? `${game.sets[2].pointsA} x ${game.sets[2].pointsB}` : '-'}
+                          {game.sets[2] && (game.sets[2].pointsA > 0 || game.sets[2].pointsB > 0)
+                            ? `${game.sets[2].pointsA} x ${game.sets[2].pointsB}`
+                            : 'N/A'}
                         </td>
                         <td className="px-4 py-3 font-medium" style={{ color: colors.primary }}>
                           {game.winner}
@@ -613,7 +663,6 @@ const IndaiaVolleyballSystem = () => {
                   <tr>
                     <th className="px-4 py-2 text-left text-white">Pos.</th>
                     <th className="px-4 py-2 text-left text-white">Equipe</th>
-                    <th className="px-4 py-2 text-left text-white">P</th>
                     <th className="px-4 py-2 text-left text-white">J</th>
                     <th className="px-4 py-2 text-left text-white">V</th>
                     <th className="px-4 py-2 text-left text-white">D</th>
@@ -625,7 +674,7 @@ const IndaiaVolleyballSystem = () => {
                 <tbody className="divide-y divide-gray-200">
                   {ranking.length === 0 ? (
                     <tr>
-                      <td colSpan="9" className="px-4 py-4 text-center text-gray-500">
+                      <td colSpan={9} className="px-4 py-4 text-center text-gray-500">
                         Nenhuma equipe na classificação ainda
                       </td>
                     </tr>
@@ -634,17 +683,16 @@ const IndaiaVolleyballSystem = () => {
                       <tr key={index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                         <td className="px-4 py-3 font-bold">{index + 1}</td>
                         <td className="px-4 py-3">{team.name}</td>
-                        <td className="px-4 py-3 font-medium" style={{ color: colors.primary }}>{team.points}</td>
                         <td className="px-4 py-3">{team.gamesPlayed}</td>
-                        <td className="px-4 py-3">{team.wins}</td>
-                        <td className="px-4 py-3">{team.losses}</td>
+                        <td className="px-4 py-3">{team.gamesWon}</td>
+                        <td className="px-4 py-3">{team.gamesLost}</td>
                         <td className="px-4 py-3">{team.setsWon}-{team.setsLost}</td>
-                        <td className="px-4 py-3">{team.pointsScored}-{team.pointsConceded}</td>
+                        <td className="px-4 py-3">{team.pointsWon}-{team.pointsLost}</td>
                         <td className="px-4 py-3" style={{
-                          color: team.pointsScored - team.pointsConceded > 0 ? 'green' :
-                            team.pointsScored - team.pointsConceded < 0 ? 'red' : 'inherit'
+                          color: team.pointsWon - team.pointsLost > 0 ? 'green' :
+                            team.pointsWon - team.pointsLost < 0 ? 'red' : 'inherit'
                         }}>
-                          {team.pointsScored - team.pointsConceded}
+                          {team.pointsWon - team.pointsLost}
                         </td>
                       </tr>
                     ))
@@ -700,6 +748,7 @@ const IndaiaVolleyballSystem = () => {
       <div className="mt-8 text-center text-sm" style={{ color: colors.text }}>
         © 2025 Sistema de Controle de Jogos de Vôlei - Clube Indaiá Dourados/MS
       </div>
+      <Toaster />
     </div>
   );
 };
