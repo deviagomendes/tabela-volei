@@ -914,7 +914,7 @@ const IndaiaVolleyballSystem = () => {
 
       {/* Rodapé */}
       <div className="mt-8 text-center text-sm" style={{ color: colors.text }}>
-        © 2025 Sistema de Controle de Jogos de Vôlei - Clube Indaiá Dourados/MS
+        © {new Date().getFullYear()} • Sistema de Controle de Jogos de Vôlei • Clube Indaiá Dourados/MS • Desenvolvido por Iago Aquino Mendes
       </div>
       <Toaster />
     </div>
