@@ -32,6 +32,7 @@ interface TeamStats {
   pointsLost: number;
   gamesWon: number;
   gamesLost: number;
+  points: number;
 }
 
 const IndaiaVolleyballSystem = () => {
@@ -177,28 +178,26 @@ const IndaiaVolleyballSystem = () => {
 
       // Determinar o vencedor do jogo (quem ganhou mais sets)
       if (setsWonByA > setsWonByB) {
-        // Time A venceu: 3 pontos para A, 0 para B
+        // Time A venceu
         teamAStats.gamesWon += 1;
-        teamAStats.pointsWon += 3;
+        teamAStats.points += 2;
         teamBStats.gamesLost += 1;
+        teamBStats.points += 1;
       } else {
-        // Time B venceu: 3 pontos para B, 0 para A
+        // Time B venceu
         teamBStats.gamesWon += 1;
-        teamBStats.pointsWon += 3;
+        teamBStats.points += 2;
         teamAStats.gamesLost += 1;
+        teamAStats.points += 1;
       }
     });
 
     // Converter o Map para array e ordenar
     const rankingArray = Array.from(teamsMap.values());
     rankingArray.sort((a, b) => {
-      // Ordenar primeiro por pontos
-      if (b.pointsWon !== a.pointsWon) return b.pointsWon - a.pointsWon;
-      // Depois por diferença de sets
-      const aSetsBalance = a.setsWon - a.setsLost;
-      const bSetsBalance = b.setsWon - b.setsLost;
-      if (bSetsBalance !== aSetsBalance) return bSetsBalance - aSetsBalance;
-      // Depois por diferença de pontos
+      // Ordenar primeiro por pontos do campeonato
+      if (b.points !== a.points) return b.points - a.points;
+      // Se empatar em pontos, ordenar por saldo de pontos
       const aPointsBalance = a.pointsWon - a.pointsLost;
       const bPointsBalance = b.pointsWon - b.pointsLost;
       return bPointsBalance - aPointsBalance;
@@ -218,7 +217,8 @@ const IndaiaVolleyballSystem = () => {
       pointsWon: 0,
       pointsLost: 0,
       gamesWon: 0,
-      gamesLost: 0
+      gamesLost: 0,
+      points: 0
     };
   };
 
@@ -829,6 +829,7 @@ const IndaiaVolleyballSystem = () => {
                   <tr>
                     <th className="px-4 py-2 text-left text-white">Pos.</th>
                     <th className="px-4 py-2 text-left text-white">Equipe</th>
+                    <th className="px-4 py-2 text-left text-white">Pts</th>
                     <th className="px-4 py-2 text-left text-white">J</th>
                     <th className="px-4 py-2 text-left text-white">V</th>
                     <th className="px-4 py-2 text-left text-white">D</th>
@@ -849,6 +850,7 @@ const IndaiaVolleyballSystem = () => {
                       <tr key={index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                         <td className="px-4 py-3 font-bold">{index + 1}</td>
                         <td className="px-4 py-3">{team.name}</td>
+                        <td className="px-4 py-3 font-bold">{team.points}</td>
                         <td className="px-4 py-3">{team.gamesPlayed}</td>
                         <td className="px-4 py-3">{team.gamesWon}</td>
                         <td className="px-4 py-3">{team.gamesLost}</td>
