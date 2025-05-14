@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from "sonner";
 import { Toaster } from "sonner";
@@ -36,12 +36,15 @@ interface TeamStats {
 }
 
 const IndaiaVolleyballSystem = () => {
+  // Adicionar ref para o formulário
+  const formRef = useRef<HTMLDivElement>(null);
+
   // Estados para armazenar os jogos e ranking
   const [games, setGames] = useState<Game[]>(() => {
     const savedGames = localStorage.getItem('volleyball-games');
     return savedGames ? JSON.parse(savedGames) : [];
   });
-  
+
   const [ranking, setRanking] = useState<TeamStats[]>([]);
   const [teams, setTeams] = useState<string[]>(() => {
     const savedTeams = localStorage.getItem('volleyball-teams');
@@ -180,13 +183,13 @@ const IndaiaVolleyballSystem = () => {
       if (setsWonByA > setsWonByB) {
         // Time A venceu
         teamAStats.gamesWon += 1;
-        teamAStats.points += 2;
+        teamAStats.points += 3;
         teamBStats.gamesLost += 1;
         teamBStats.points += 1;
       } else {
         // Time B venceu
         teamBStats.gamesWon += 1;
-        teamBStats.points += 2;
+        teamBStats.points += 3;
         teamAStats.gamesLost += 1;
         teamAStats.points += 1;
       }
@@ -240,7 +243,7 @@ const IndaiaVolleyballSystem = () => {
   // Função para remover um time
   const handleRemoveTeam = (teamToRemove: string) => {
     // Verificar se o time está em algum jogo
-    const isTeamInGames = games.some(game => 
+    const isTeamInGames = games.some(game =>
       game.teamA === teamToRemove || game.teamB === teamToRemove
     );
 
@@ -346,6 +349,10 @@ const IndaiaVolleyballSystem = () => {
       date: gameToEdit.date || new Date().toISOString()
     });
     setEditingIndex(index);
+    
+    // Scroll suave até o formulário
+    formRef.current?.scrollIntoView({ behavior: 'smooth' });
+    
     toast.info("Modo de edição ativado. Faça as alterações necessárias.");
   };
 
@@ -498,7 +505,7 @@ const IndaiaVolleyballSystem = () => {
 
         <TabsContent value="jogos">
           {/* Card para adicionar/editar jogos */}
-          <div className="mb-8 p-6 rounded-lg shadow-md" style={{ backgroundColor: 'white' }}>
+          <div ref={formRef} className="mb-8 p-6 rounded-lg shadow-md" style={{ backgroundColor: 'white' }}>
             <h2 className="text-xl font-semibold mb-4" style={{ color: colors.primary }}>
               {editingIndex !== null ? 'Editar Jogo' : 'Registrar Novo Jogo'}
             </h2>
@@ -815,11 +822,12 @@ const IndaiaVolleyballSystem = () => {
             <div className="mb-4 text-sm text-gray-600">
               <p><strong>Pos.</strong> - Posição na classificação</p>
               <p><strong>Equipe</strong> - Nome da equipe</p>
+              <p><strong>Pts</strong> - Pontos do campeonato</p>
               <p><strong>J</strong> - Total de jogos disputados</p>
               <p><strong>V</strong> - Vitórias</p>
               <p><strong>D</strong> - Derrotas</p>
-              <p><strong>Sets (G-P)</strong> - Sets ganhos e perdidos</p>
-              <p><strong>Pontos (M-S)</strong> - Pontos marcados e sofridos</p>
+              <p><strong>Sets (P x C)</strong> - Sets ganhos (PRO) e perdidos (CONTRA)</p>
+              <p><strong>Pontos (P x C)</strong> - Pontos marcados (PRO) e sofridos (CONTRA)</p>
               <p><strong>Saldo</strong> - Diferença entre pontos marcados e sofridos</p>
             </div>
 
@@ -833,8 +841,8 @@ const IndaiaVolleyballSystem = () => {
                     <th className="px-4 py-2 text-left text-white">J</th>
                     <th className="px-4 py-2 text-left text-white">V</th>
                     <th className="px-4 py-2 text-left text-white">D</th>
-                    <th className="px-4 py-2 text-left text-white">Sets (G-P)</th>
-                    <th className="px-4 py-2 text-left text-white">Pontos (M-S)</th>
+                    <th className="px-4 py-2 text-left text-white">Sets (P x C)</th>
+                    <th className="px-4 py-2 text-left text-white">Pontos (P x C)</th>
                     <th className="px-4 py-2 text-left text-white">Saldo</th>
                   </tr>
                 </thead>
@@ -854,8 +862,8 @@ const IndaiaVolleyballSystem = () => {
                         <td className="px-4 py-3">{team.gamesPlayed}</td>
                         <td className="px-4 py-3">{team.gamesWon}</td>
                         <td className="px-4 py-3">{team.gamesLost}</td>
-                        <td className="px-4 py-3">{team.setsWon}-{team.setsLost}</td>
-                        <td className="px-4 py-3">{team.pointsWon}-{team.pointsLost}</td>
+                        <td className="px-4 py-3">{team.setsWon} x {team.setsLost}</td>
+                        <td className="px-4 py-3">{team.pointsWon} x {team.pointsLost}</td>
                         <td className="px-4 py-3" style={{
                           color: team.pointsWon - team.pointsLost > 0 ? 'green' :
                             team.pointsWon - team.pointsLost < 0 ? 'red' : 'inherit'
